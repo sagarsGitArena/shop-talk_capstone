@@ -11,7 +11,8 @@ import glob
 import json
 from utilities import flatten_json
 
-from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR 
+from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV
+
 #from s3_download import download_file_from_s3
 
 
@@ -169,9 +170,9 @@ def flatten_all_json_and_save_as_csv(local_extracted_json_dir):
         
 
     print(raw_data_df.info())
+    all_listings_csv_file = directory_path +'/'+ ALL_LISTINGS_DATA_CSV
+    raw_data_df.to_csv(all_listings_csv_file)
     
-
-
 
 
 # DAG definition
@@ -203,20 +204,26 @@ with DAG(
                                         "extracted_file_pattern": "listings_?.json.gz",
                                         "decompressed_json_file_pattern": "listings_?.json"},
         #provide_context=True,        
-        trigger_rule='all_done',
-#        dag=dag
-
+        trigger_rule='all_done'
     )
     
-    flatten_each_json_and_save_as_csv = PythonOperator(
-        task_id="flatten_each_json_and_save_as_csv",
-        python_callable=flatten_each_json_and_save_as_csv,
+    # flatten_each_json_and_save_as_csv = PythonOperator(
+    #     task_id="flatten_each_json_and_save_as_csv",
+    #     python_callable=flatten_each_json_and_save_as_csv,
+    #     op_kwargs= {"local_extracted_json_dir": "listings/metadata/"                   
+    #     },
+    #     #provide_context=True,        
+    #     trigger_rule='all_done',
+    # )
+    
+    
+    flatten_all_json_and_save_as_csv = PythonOperator(
+        task_id="flatten_all_json_and_save_as_csv",
+        python_callable=flatten_all_json_and_save_as_csv,
         op_kwargs= {"local_extracted_json_dir": "listings/metadata/"                   
         },
         #provide_context=True,        
         trigger_rule='all_done',
-#        dag=dag
-
     )
 
     # process_task = PythonOperator(
@@ -225,7 +232,7 @@ with DAG(
     # )
     
     #Intended for local machine run
-    download_task >> extract_task >> flatten_each_json_and_save_as_csv
+    #download_task >> extract_task >> flatten_each_json_and_save_as_csv
     #Intended to run in a machine with high RAM (eg: AWS EC2)
-    #download_task >> extract_task >> flatten_all_json_and_save_as_csv    
+    download_task >> extract_task >> flatten_all_json_and_save_as_csv 
     
