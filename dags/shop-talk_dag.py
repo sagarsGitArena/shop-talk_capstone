@@ -9,9 +9,12 @@ import shutil
 import gzip
 import glob
 import json
-from utilities import flatten_json
+from utils.json_utils import flatten_json
+from utils.s3_utils import upload_file_to_s3
 
-from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV
+from datetime import datetime, timedelta
+
+from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION
 
 #from s3_download import download_file_from_s3
 
@@ -120,7 +123,7 @@ def flatten_each_json_and_save_as_csv(local_extracted_json_dir):
     directory_path= os.path.join(LOCAL_RAW_DATA_DIR, local_extracted_json_dir)
     json_files = [f for f in os.listdir(directory_path) if f.endswith('.json')]    
     print(f"JSON FILES LIST :{json_files}")
-
+    
     for listing_file in json_files:
         print(f'Processing : {listing_file}')
         listing_file_path = os.path.join(directory_path, listing_file)
@@ -136,6 +139,7 @@ def flatten_each_json_and_save_as_csv(local_extracted_json_dir):
         csv_file = directory_path +'/'+ base_file_name + '.csv'
         flattened_json_as_df.to_csv(csv_file)      
         print(f'saved : {listing_file} as {csv_file}')     
+    
 
     
     
@@ -148,9 +152,10 @@ def flatten_all_json_and_save_as_csv(local_extracted_json_dir):
     print("ENTERED flatten_json_and_load_to_dataframe ***************")
     directory_path= os.path.join(LOCAL_RAW_DATA_DIR, local_extracted_json_dir)
     json_files = [f for f in os.listdir(directory_path) if f.endswith('.json')]
-    raw_data_df=pd.DataFrame()
+    #raw_data_df=pd.DataFrame()
     print(f"JSON FILES LIST :{json_files}")
 
+    us_listings_raw_df = pd.DataFrame()
     for listing_file in json_files:
         print(f'Processing : {listing_file}')
         listing_file_path = os.path.join(directory_path, listing_file)
@@ -165,14 +170,28 @@ def flatten_all_json_and_save_as_csv(local_extracted_json_dir):
         base_file_name = listing_file.split('.')[0]
         csv_file = directory_path +'/'+ base_file_name + '.csv'
         flattened_json_as_df.to_csv(csv_file)
-        raw_data_df = pd.concat([raw_data_df, flattened_json_as_df], ignore_index=True)
+        
+        us_listing_df = flattened_json_as_df[flattened_json_as_df['country'] == 'US']
+        us_listings_raw_df  = pd.concat([ us_listings_raw_df ,  us_listing_df ], ignore_index=True)
         print(f'saved : {listing_file} as {csv_file}')
         
 
-    print(raw_data_df.info())
-    all_listings_csv_file = directory_path +'/'+ ALL_LISTINGS_DATA_CSV
-    raw_data_df.to_csv(all_listings_csv_file)
+    print(us_listings_raw_df.info())
+    all_listings_csv_file = directory_path +'/'+ US_ONLY_LISTINGS_CSV
+    us_listings_raw_df.to_csv(all_listings_csv_file)
+    print(f"US_listings raw data is saved to :{all_listings_csv_file}")
     
+
+def up_load_us_listings_to_s3():
+    aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    print(f'aws_access_key: {aws_access_key_id} - aws_secret_access_key: {aws_secret_access_key}')
+    print(f' AWS_S3_BUCKET: {AWS_S3_BUCKET}')    
+    
+    local_file_path2 = LISTINGS_CSV_FILE_LOCATION + 'us_listings.csv'
+    print(f'local_file_path2: {os.path.exists(local_file_path2)}')
+    upload_file_to_s3(aws_access_key_id, aws_secret_access_key, AWS_S3_BUCKET, "listings/us_listings.csv", local_file_path2 )
+
 
 
 # DAG definition
@@ -187,7 +206,9 @@ with DAG(
     default_args=default_args,
     description="Pipeline to download, extract, and process product listings",
     start_date=datetime(2024, 1, 1),
-    schedule_interval="@daily",
+    #schedule_interval="@daily",
+    #schedule_interval="*/10 * * * *",  # Every 10 minutes
+    schedule_interval=timedelta(minutes=10),  # Every 10 minutes
     catchup=False,
 ) as dag:
 
@@ -225,14 +246,14 @@ with DAG(
         #provide_context=True,        
         trigger_rule='all_done',
     )
-
-    # process_task = PythonOperator(
-    #     task_id="process_csv_files",
-    #     python_callable=process_csv_files,
-    # )
     
-    #Intended for local machine run
-    #download_task >> extract_task >> flatten_each_json_and_save_as_csv
-    #Intended to run in a machine with high RAM (eg: AWS EC2)
-    download_task >> extract_task >> flatten_all_json_and_save_as_csv 
+    upload_listings_to_s3 = PythonOperator(
+        task_id="upload_listings_to_s3",
+        python_callable=up_load_us_listings_to_s3,
+        trigger_rule='all_done'
+    )
+
+
+#Intended to run in a machine with high RAM (eg: AWS EC2)
+    download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3
     
