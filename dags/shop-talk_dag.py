@@ -14,7 +14,7 @@ from utils.s3_utils import upload_file_to_s3
 
 from datetime import datetime, timedelta
 
-from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION
+from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION, IMAGES_DOWNLOAD_PATH_URL,LOCAL_RAW_IMGS_DIR
 
 #from s3_download import download_file_from_s3
 
@@ -182,6 +182,85 @@ def flatten_all_json_and_save_as_csv(local_extracted_json_dir):
     print(f"US_listings raw data is saved to :{all_listings_csv_file}")
     
 
+def flatten_to_csv_images(**kwargs):
+    """Decompress and flatten the image metadata to a CSV file."""
+    metadata_gz_path = os.path.join(LOCAL_RAW_IMGS_DIR, "images/metadata/images.csv.gz")
+    output_csv_path = os.path.join(LOCAL_RAW_IMGS_DIR, "images_metadata.csv")
+
+    # Check if the compressed metadata file exists
+    if not os.path.exists(metadata_gz_path):
+        raise FileNotFoundError(f"Metadata file not found: {metadata_gz_path}")
+
+    print(f"Decompressing and processing metadata file: {metadata_gz_path}")
+    decompressed_file_path = metadata_gz_path.rstrip(".gz")
+
+    # Decompress the .gz file
+    with gzip.open(metadata_gz_path, "rb") as f_in:
+        with open(decompressed_file_path, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+    # Read the decompressed CSV file
+    metadata_df = pd.read_csv(decompressed_file_path)
+    print(f"Metadata columns: {metadata_df.columns}")
+    print(f"Number of records in metadata: {len(metadata_df)}")
+
+    # Save the decompressed metadata to a flat CSV file
+    metadata_df.to_csv(output_csv_path, index=False)
+    print(f"Flattened metadata saved to: {output_csv_path}")
+
+
+def download_tar_file_images(**kwargs):
+    """Download the image tar file from the specified URL."""
+    # Define the local path to save the tar file
+    local_tar_path = os.path.join(LOCAL_RAW_IMGS_DIR, "abo-images-small.tar")
+
+    # Check if the file already exists to avoid re-downloading
+    if os.path.exists(local_tar_path):
+        print(f"File already downloaded and exists: {local_tar_path}.")
+        return
+
+    # Make the local directory if it doesn't exist
+    os.makedirs(LOCAL_RAW_IMGS_DIR, exist_ok=True)
+
+    # Download the tar file from the specified URL
+    response = requests.get(IMAGES_DOWNLOAD_PATH_URL, stream=True)
+    print(f"Downloading from URL: {IMAGES_DOWNLOAD_PATH_URL}")
+    response.raise_for_status()  # Raise an exception for HTTP errors
+
+    # Save the file to disk in chunks
+    with open(local_tar_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            f.write(chunk)
+
+    # List files in the directory for confirmation
+    files = os.listdir(LOCAL_RAW_IMGS_DIR)
+    print(f"Files at {LOCAL_RAW_IMGS_DIR}: {files}")
+    print(f"Downloaded tar file to {local_tar_path}")
+
+def extract_tar_file_images(**kwargs):
+    """Extract the image tar file and process metadata and images."""
+    tar_file_path = os.path.join(LOCAL_RAW_IMGS_DIR, "abo-images-small.tar")
+    extract_dir = LOCAL_RAW_IMGS_DIR
+
+    # Check if the tar file exists
+    if not os.path.exists(tar_file_path):
+        raise FileNotFoundError(f"Tar file not found: {tar_file_path}")
+
+    # Check if already extracted
+    if os.path.exists(os.path.join(extract_dir, "images")):
+        print(f"Tar file already extracted to: {extract_dir}. Skipping extraction.")
+        return
+
+    print(f"Extracting tar file: {tar_file_path}")
+    try:
+        # Open the tar file and extract its contents
+        with tarfile.open(tar_file_path, "r:*") as tar:
+            tar.extractall(extract_dir)
+        print(f"Successfully extracted tar file to: {extract_dir}")
+    except tarfile.TarError as e:
+        print(f"Error extracting tar file: {e}")
+        raise    
+
 def up_load_us_listings_to_s3():
     aws_access_key_id = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret_access_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
@@ -253,7 +332,27 @@ with DAG(
         trigger_rule='all_done'
     )
 
-
-#Intended to run in a machine with high RAM (eg: AWS EC2)
+    #Intended to run in a machine with high RAM (eg: AWS EC2)
     download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3
+
+  # Task 1: Download the images tar file
+    download_images_task = PythonOperator(
+        task_id="download_tar_file_images",
+        python_callable=download_tar_file_images,
+    )
+
+    # Task 2: Extract the images tar file
+    extract_images_task = PythonOperator(
+        task_id="extract_tar_file_images",
+        python_callable=extract_tar_file_images,
+    )
+
+    # Task 3: Flatten the image metadata to a CSV file
+    flatten_images_metadata_task = PythonOperator(
+        task_id="flatten_to_csv_images",
+        python_callable=flatten_to_csv_images,
+    )
+    # Define task dependencies
+    download_images_task >> extract_images_task >> flatten_images_metadata_task
     
+
