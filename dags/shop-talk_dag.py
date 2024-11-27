@@ -271,7 +271,9 @@ def up_load_us_listings_to_s3():
     print(f'local_file_path2: {os.path.exists(local_file_path2)}')
     upload_file_to_s3(aws_access_key_id, aws_secret_access_key, AWS_S3_BUCKET, "listings/us_listings.csv", local_file_path2 )
 
-
+def merge_listings_images():
+    print(f'MERGED listings and images dataframes')
+    pass
 
 # DAG definition
 default_args = {
@@ -332,8 +334,6 @@ with DAG(
         trigger_rule='all_done'
     )
 
-    #Intended to run in a machine with high RAM (eg: AWS EC2)
-    download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3
 
   # Task 1: Download the images tar file
     download_images_task = PythonOperator(
@@ -353,6 +353,10 @@ with DAG(
         python_callable=flatten_to_csv_images,
     )
     # Define task dependencies
-    download_images_task >> extract_images_task >> flatten_images_metadata_task
-    
+
+    merge_listings_image_df_task = PythonOperator(
+            task_id="merge_listings_images",
+            python_callable=merge_listings_images,
+    )
+    [download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3, download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
 
