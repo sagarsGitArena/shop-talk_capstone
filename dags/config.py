@@ -8,4 +8,6 @@ AWS_S3_BUCKET="shoptalk-bucket"
 
 IMAGES_DOWNLOAD_PATH_URL="https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-images-small.tar"
 LOCAL_RAW_IMGS_DIR="/opt/airflow/data/rawimages"
+IMAGES_CSV_FILE_LOCATION="/opt/airflow/data/rawimages/images/metadata"
+IMAGES_CSV_FILE="images.csv"
 

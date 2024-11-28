@@ -14,7 +14,7 @@ from utils.s3_utils import upload_file_to_s3
 
 from datetime import datetime, timedelta
 
-from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION, IMAGES_DOWNLOAD_PATH_URL,LOCAL_RAW_IMGS_DIR
+from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION, IMAGES_DOWNLOAD_PATH_URL,LOCAL_RAW_IMGS_DIR, IMAGES_CSV_FILE_LOCATION, IMAGES_CSV_FILE
 
 #from s3_download import download_file_from_s3
 
@@ -272,7 +272,10 @@ def up_load_us_listings_to_s3():
     upload_file_to_s3(aws_access_key_id, aws_secret_access_key, AWS_S3_BUCKET, "listings/us_listings.csv", local_file_path2 )
 
 def merge_listings_images():
+    # Read from local and merge
     print(f'MERGED listings and images dataframes')
+    images_csv_df = pd.read_csv()
+    us_listings_csv_df = pd.read_csv()
     pass
 
 # DAG definition
@@ -290,12 +293,14 @@ with DAG(
     #schedule_interval="@daily",
     #schedule_interval="*/10 * * * *",  # Every 10 minutes
     schedule_interval=timedelta(minutes=10),  # Every 10 minutes
+    max_active_runs=1,
     catchup=False,
 ) as dag:
 
     download_task = PythonOperator(
         task_id="download_tar_file",
         python_callable=download_tar_file,
+        dag=dag
     )
 
     extract_task = PythonOperator(
@@ -306,7 +311,10 @@ with DAG(
                                         "extracted_file_pattern": "listings_?.json.gz",
                                         "decompressed_json_file_pattern": "listings_?.json"},
         #provide_context=True,        
-        trigger_rule='all_done'
+        trigger_rule='all_success',
+        depends_on_past=False,
+        dag=dag
+        
     )
     
     # flatten_each_json_and_save_as_csv = PythonOperator(
@@ -325,13 +333,17 @@ with DAG(
         op_kwargs= {"local_extracted_json_dir": "listings/metadata/"                   
         },
         #provide_context=True,        
-        trigger_rule='all_done',
+        trigger_rule='all_success',
+        depends_on_past=False,
+        dag=dag
     )
     
     upload_listings_to_s3 = PythonOperator(
         task_id="upload_listings_to_s3",
         python_callable=up_load_us_listings_to_s3,
-        trigger_rule='all_done'
+        trigger_rule='all_success',
+        depends_on_past=False,
+        dag=dag
     )
 
 
@@ -339,24 +351,36 @@ with DAG(
     download_images_task = PythonOperator(
         task_id="download_tar_file_images",
         python_callable=download_tar_file_images,
+        depends_on_past=False,
+        dag=dag
     )
 
     # Task 2: Extract the images tar file
     extract_images_task = PythonOperator(
         task_id="extract_tar_file_images",
         python_callable=extract_tar_file_images,
+        trigger_rule='all_success',
+        depends_on_past=False,
+        dag=dag
     )
 
     # Task 3: Flatten the image metadata to a CSV file
     flatten_images_metadata_task = PythonOperator(
         task_id="flatten_to_csv_images",
         python_callable=flatten_to_csv_images,
+        trigger_rule='all_success',
+        depends_on_past=False,
+        dag=dag
     )
     # Define task dependencies
 
     merge_listings_image_df_task = PythonOperator(
             task_id="merge_listings_images",
             python_callable=merge_listings_images,
+            trigger_rule='all_success',
+            depends_on_past=False,
+            dag=dag
     )
     [download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3, download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
+
 
