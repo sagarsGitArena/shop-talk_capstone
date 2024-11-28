@@ -274,9 +274,12 @@ def up_load_us_listings_to_s3():
 def merge_listings_images():
     # Read from local and merge
     print(f'MERGED listings and images dataframes')
-    images_csv_df = pd.read_csv()
-    us_listings_csv_df = pd.read_csv()
-    pass
+    images_csv_path=IMAGES_CSV_FILE_LOCATION+"/"+IMAGES_CSV_FILE
+    images_csv_df = pd.read_csv(images_csv_df)
+    listings_csv_path=LISTINGS_CSV_FILE_LOCATION+"/"+US_ONLY_LISTINGS_CSV
+    us_listings_csv_df = pd.read_csv(listings_csv_path)    
+    merged_df = pd.merge(us_listings_csv_df, images_csv_df, left_on='main_image_id', right_on='image_id', how=left)
+    
 
 # DAG definition
 default_args = {
