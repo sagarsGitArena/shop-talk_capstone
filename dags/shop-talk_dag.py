@@ -11,6 +11,8 @@ import glob
 import json
 from utils.json_utils import flatten_json
 from utils.s3_utils import upload_file_to_s3
+import re
+import numpy as np
 
 from datetime import datetime, timedelta
 
@@ -182,6 +184,58 @@ def flatten_all_json_and_save_as_csv(local_extracted_json_dir):
     print(f"US_listings raw data is saved to :{all_listings_csv_file}")
     
 
+def perform_eda_on_us_listings_data(local_extracted_json_dir):
+    
+    directory_path = os.path.join(LOCAL_RAW_DATA_DIR)
+    all_listings_csv_file = directory_path +'/'+ US_ONLY_LISTINGS_CSV
+    US_DF = pd.read_csv(all_listings_csv_file)
+    
+    ## Replacing 
+    language_tag_columns = [col for col in US_DF.columns if 'language_tag' in col]
+    value_columns =  [col.replace('language_tag', 'value') for col in language_tag_columns]
+
+    language_df=US_DF[language_tag_columns ].copy()
+    value_df=US_DF[value_columns].copy()
+    distinct_columns_set = {re.sub(r'_\d+_language_tag', '', col) for col in language_tag_columns}
+    
+    lang_val_merge_df = pd.DataFrame()
+
+    for a_col in distinct_columns_set:
+        the_column_list = []
+        prefix = a_col + '_'
+        print(prefix)
+        the_column_list = [col for col in US_DF.columns if prefix in col]
+        the_column_list = [col for col in the_column_list if 'standardized' not in col]
+        the_column_list = [col for col in the_column_list if 'alternate_representations' not in col]
+
+        num_brand_keypairs = len(the_column_list)//2
+        print(the_column_list)
+        a_col_value= prefix + 'value'
+        lang_val_merge_df[a_col_value] = US_DF.apply(
+            lambda row: ' '.join(
+                str(row[f'{prefix}{i}_value'])
+                for i in range(num_brand_keypairs)
+                if row[f'{prefix}{i}_language_tag'] == 'en_US'
+            ).strip(),
+            axis=1
+        )
+    
+    US_DF.drop(columns=language_tag_columns, inplace=True)
+    US_DF.drop(columns=value_columns, inplace=True)
+    
+    df_new = US_DF.drop([col for col in US_DF.columns if 'standardized' in col], axis=1)
+    df_new2 = df_new.drop([col for col in df_new.columns if 'alternate_representations' in col], axis=1)
+    
+    US_DF_filtered = pd.concat([df_new2, lang_val_merge_df], axis=1)
+    
+    drop_column_list1=['spin_id', '3dmodel_id', 'node_0_node_id', 'node_0_node_name', 'node_1_node_id', 'node_1_node_name', 'node_2_node_id', 'node_2_node_name', 'node_3_node_id', 'node_3_node_name', 'node_4_node_id', 'node_4_node_name', 'node_5_node_id', 'node_5_node_name', 'node_6_node_id', 'node_6_node_name', 'node_7_node_id', 'node_7_node_name', 'node_8_node_id', 'node_8_node_name', 'node_9_node_id', 'node_9_node_name', 'node_10_node_id', 'node_10_node_name']
+    US_DF_filtered3= US_DF_filtered.drop(columns=drop_column_list1)
+    US_DF_filtered4 = US_DF_filtered3.dropna(subset=['main_image_id'])
+    US_DF_filtered4['Price'] = np.random.uniform(20, 100, size=len(US_DF_filtered4)).round(2)
+    
+    US_DF_filtered4.to_csv(directory_path+'/'+'All_US_DF_filtered_v1.csv', index=False)
+    
+
 def flatten_to_csv_images(**kwargs):
     """Decompress and flatten the image metadata to a CSV file."""
     metadata_gz_path = os.path.join(LOCAL_RAW_IMGS_DIR, "images/metadata/images.csv.gz")
@@ -341,13 +395,13 @@ with DAG(
         dag=dag
     )
     
-    upload_listings_to_s3 = PythonOperator(
-        task_id="upload_listings_to_s3",
-        python_callable=up_load_us_listings_to_s3,
-        trigger_rule='all_success',
-        depends_on_past=False,
-        dag=dag
-    )
+    # upload_listings_to_s3 = PythonOperator(
+    #     task_id="upload_listings_to_s3",
+    #     python_callable=up_load_us_listings_to_s3,
+    #     trigger_rule='all_success',
+    #     depends_on_past=False,
+    #     dag=dag
+    # )
 
 
   # Task 1: Download the images tar file
@@ -384,6 +438,5 @@ with DAG(
             depends_on_past=False,
             dag=dag
     )
-    [download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3, download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
-
-
+    # [download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3, download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
+[download_task >> extract_task >> flatten_all_json_and_save_as_csv , download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
