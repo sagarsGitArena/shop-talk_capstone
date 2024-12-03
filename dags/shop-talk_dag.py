@@ -14,6 +14,7 @@ from utils.s3_utils import upload_file_to_s3
 import re
 import numpy as np
 import mlflow
+from sentence_transformers import SentenceTransformer
 
 from datetime import datetime, timedelta
 
