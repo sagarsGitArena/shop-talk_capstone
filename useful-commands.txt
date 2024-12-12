@@ -1,0 +1,4 @@
+### To clean all teh images and volumes that were built locally
+docker system prune -a --volumes -f
+#check disk space in docker container
+docker system df
