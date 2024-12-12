@@ -3,4 +3,5 @@ USER airflow
 # Install additional Python packages, including MLFlow
 RUN pip install --no-cache-dir \
     mlflow \
-    sentence-transformers
+    sentence-transformers \
+    urllib3==1.26.17
