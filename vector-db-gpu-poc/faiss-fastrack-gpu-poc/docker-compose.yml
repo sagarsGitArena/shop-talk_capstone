@@ -7,6 +7,9 @@ services:
     ports:
       - "8080:8000"
     container_name: faiss-service
+    runtime: nvidia  # Only Faiss service requires GPU access
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all  # Expose all GPUs to Faiss
 
   fasttrack-api:
     build:
@@ -16,3 +19,4 @@ services:
     container_name: fasttrack-api
     depends_on:
       - faiss
+    # No GPU access needed for the API service
