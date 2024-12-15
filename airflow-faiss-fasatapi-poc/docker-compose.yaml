@@ -46,6 +46,9 @@
 
 ---
 version: '3.8'
+networks:
+  shoptalk_network:
+
 x-airflow-common:
   &airflow-common
   # In order to add custom dependencies or upgrade provider packages you can use your extended image.
@@ -54,6 +57,8 @@ x-airflow-common:
   
   #image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:2.7.2}  
   image: ${AIRFLOW_IMAGE_NAME:-vasamsetty/airflow-urllib3_1.26.17:latest}
+  networks:
+      - shoptalk_network
   # build: .
   environment:
     &airflow-common-env
@@ -100,6 +105,8 @@ x-airflow-common:
 services:
   postgres:
     image: postgres:13
+    networks:
+      - shoptalk_network
     environment:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
@@ -115,6 +122,8 @@ services:
 
   redis:
     image: redis:latest
+    networks:
+      - shoptalk_network
     expose:
       - 6379
     healthcheck:
@@ -314,8 +323,12 @@ services:
     build:
       context: ./faiss
     ports:
-      - "8080:8000"
+      - "5050:8000"
     container_name: faiss-service
+    networks:
+      - shoptalk_network
+    volumes:
+      - ./tmp_data:/app/tmp_data
 
   fasttrack-api:
     build:
@@ -323,13 +336,11 @@ services:
     ports:
       - "6060:5000"
     container_name: fasttrack-api
+    networks:
+      - shoptalk_network
     depends_on:
       - faiss
 
 
 volumes:
   postgres-db-volume:
-
-
-
-

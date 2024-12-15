@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install -y \
     libomp-dev \
     python3-pip \
     python3-dev && \
-    pip3 install --no-cache-dir faiss-gpu flask
+    pip3 install --no-cache-dir faiss-gpu flask \
+    sentence-transformers 
 
 # RUN pip install --no-cache-dir numpy faiss-gpu flask
 

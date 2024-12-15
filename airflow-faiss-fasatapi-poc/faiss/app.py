@@ -2,6 +2,13 @@ from flask import Flask, request, jsonify
 import faiss
 import numpy as np
 import cupy  # CuPy to support GPU operations
+import os
+import pandas as pd
+
+from utils.s3_download import download_file_from_s3 
+from config import BUCKET_NAME, S3_DATA_FILE_PATH, LOCAL_TMP_DOWNLOAD_PATH
+
+
 
 app = Flask(__name__)
 
@@ -30,6 +37,36 @@ def search_vectors():
     k = request.json.get("k", 5)  # Number of neighbors
     distances, indices = index_gpu.search(query, k)  # Perform search on GPU index
     return jsonify({"distances": distances.tolist(), "indices": indices.tolist()})
+
+@app.route("/load_data_file_from_s3", medthods=["POST"])
+def embed_description_and_load_vectors():
+
+    local_file_path = os.path.join(LOCAL_TMP_DOWNLOAD_PATH, S3_DATA_FILE_PATH)
+
+    data = request.json
+    s3_bucket_name = data['s3_bucket_name']
+    aws_access_key = data['aws_access_key']
+    aws_secret_key = data['aws_secret_key']
+    file_name = data['file_name']
+
+    print(f'bucket name:{s3_bucket_name}, aws_access_key:{aws_access_key}, aws_secret_key:{aws_secret_key}, fine_name:{file_name}')
+
+    # Download the CSV from S3
+    download_file_from_s3(aws_access_key, aws_secret_key, s3_bucket_name, file_name, local_file_path)
+    # file_obj = s3_client.get_object(Bucket=bucket_name, Key=file_key)
+    US_df = pd.read_csv(os.path.join(local_file_path, file_name))
+    print('====================================')
+    print(US_df.info())
+    print('====================================')
+    # Get the 'descriptions' column and process
+    #descriptions = df['descriptions'].tolist(
+    #embeddings = compute_embeddings(descriptions)
+
+    # Add embeddings to FAISS index
+    #index.add(embeddings)
+
+    return jsonify({"status": "success", "message": "Embeddings processed and loaded to FAISS!"}), 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000)
