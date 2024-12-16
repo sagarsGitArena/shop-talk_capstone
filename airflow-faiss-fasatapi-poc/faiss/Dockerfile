@@ -21,15 +21,17 @@ RUN apt-get update && apt-get install -y \
 
 # Install specific versions of NumPy and FAISS
 RUN pip install --no-cache-dir \
+                pandas \
                 "numpy<2" \
                 faiss-gpu \
                 flask \
-                "cupy-cuda12x" 
+                "cupy-cuda12x" \
+                boto3
 
 
 # Copy application files
 WORKDIR /app
-COPY app.py .
+COPY . /app
 
 # Expose FAISS service
 EXPOSE 8000

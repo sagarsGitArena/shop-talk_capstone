@@ -5,11 +5,15 @@ from airflow.sensors.s3_key_sensor import S3KeySensor
 from airflow.operators.python_operator import PythonOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.hooks.base_hook import BaseHook
+import sys
+print(f'data-pipeline-dag PATH: {sys.path}')
+
 
 #from preprocessing import preprocess_data
 import os
-from config import BUCKET_NAME, S3_DATA_FILE_PATH, FAISS_API_ENDPOINT
-from utils.s3_utils import download_file_from_s3
+from config import BUCKET_NAME, S3_OBJECT_KEY, FAISS_API_ENDPOINT
+from airflow_utils.s3_utils import download_file_from_s3
 
 default_args = {
     "owner": "airflow",
@@ -29,6 +33,26 @@ default_args = {
 #     catchup=False,
 # ) as dag:
 
+
+# # Custom connection configuration
+# http_conn_id = 'faiss_api_connection'
+
+# # Normally, this would be configured in the Airflow UI, but you can simulate this in DAG code itself
+# # Simulate the connection details dynamically
+# conn = {
+#     'conn_id': http_conn_id,
+#     'conn_type': 'http',
+#     'host': 'faiss-service',  # This would be your service host (replace faiss-service with actual hostname)
+#     'schema': 'http',  # Use 'http' or 'https' based on the protocol of your service
+#     'port': 5050,  # The port where your service is running
+#     'extra': '{}'
+# }
+
+# # Dynamically create an Http connection in Airflow's metadata DB (used in DAG)
+# BaseHook.get_connection = lambda conn_id: conn  # Mocking or dynamically returning the connection for SimpleHttpOperator
+
+
+
 with DAG(
     dag_id='shoptalk-data-pipeline',
     default_args=default_args,
@@ -44,7 +68,7 @@ with DAG(
         task_id='check_if_data_file_arrived',
         poke_interval=10,  # Check for file every 60 seconds
         timeout=6000,  # Timeout if file not found after 600 seconds
-        bucket_key=S3_DATA_FILE_PATH,  # Update with your S3 path
+        bucket_key=S3_OBJECT_KEY,  # Update with your S3 path
         bucket_name=BUCKET_NAME,
         aws_conn_id="aws_default",
         mode='poke',
@@ -58,22 +82,42 @@ with DAG(
     #   3> load embeddings into DB
 
     # Step 2: Trigger FAISS Service via API (passing S3 bucket and file info)
+    # load_faiss_vector_db = SimpleHttpOperator(
+    #     task_id='trigger_load_to_fiass_vector_db',
+    #     method='POST',
+    #     http_conn_id='faiss_api_connection',  # Define this connection in Airflow's Connection UI
+    #     endpoint='/load_data_file_from_s3',
+    #     data={
+    #         's3_bucket_name': BUCKET_NAME,
+    #         'aws_access_key':  os.environ["AWS_ACCESS_KEY_ID"],
+    #         'aws_secret_key': os.environ["AWS_SECRET_ACCESS_KEY"],
+    #         'file_name' : S3_OBJECT_KEY
+    #     },
+    #     headers={'Content-Type': 'application/json'},
+    #    # response_check=lambda response, context: response.status_code == 200,  # Corrected this line
+    #     response_check=lambda response: response.status_code == 200,  # Ensure the request succeeds
+    #     extra_options={"timeout": 600},
+    # )
+    # Task 2: 
+    #   call faiss api for faiss service to do the following
+    #   1> load to DF 
+    #   2> create embeddings from description
+    #   3> load embeddings into DB
 
+    # Step 2: Trigger FAISS Service via API (passing S3 bucket and file info)
     load_faiss_vector_db = SimpleHttpOperator(
         task_id='trigger_load_to_fiass_vector_db',
         method='POST',
-        http_conn_id='faiss_api_connection',  # Define this connection in Airflow's Connection UI
+        http_conn_id=None,  # Define this connection in Airflow's Connection UI
         endpoint=FAISS_API_ENDPOINT,
         data={
             's3_bucket_name': BUCKET_NAME,
             'aws_access_key':  os.environ["AWS_ACCESS_KEY_ID"],
             'aws_secret_key': os.environ["AWS_SECRET_ACCESS_KEY"],
-            'file_name' : S3_DATA_FILE_PATH
-
+            'file_name' : S3_OBJECT_KEY
         },
-        headers={'Content-Type': 'application/json'},
-        response_check=lambda response: response.status_code == 200,  # Ensure the request succeeds
-        extra_options={"timeout": 600},  # This is valid
+        headers={"Content-Type": "application/json"},
+        response_check=lambda response: response.status_code == 200,  # Check success status
+        extra_options={"timeout": 120},  # Timeout of 2 minutes
     )
-
-    check_if_data_file_arrived >> load_faiss_vector_db
+check_if_data_file_arrived >> load_faiss_vector_db

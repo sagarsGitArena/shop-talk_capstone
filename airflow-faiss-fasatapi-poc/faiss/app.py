@@ -3,9 +3,12 @@ import faiss
 import numpy as np
 import cupy  # CuPy to support GPU operations
 import os
+import sys
 import pandas as pd
+sys.path.append(os.path.join(os.path.dirname(__file__), 'faiss_utils'))
+print(f'faiss: app.py - PATH: {sys.path}')
 
-from utils.s3_download import download_file_from_s3 
+from faiss_utils.s3_download import download_file_from_s3 
 from config import BUCKET_NAME, S3_DATA_FILE_PATH, LOCAL_TMP_DOWNLOAD_PATH
 
 
@@ -41,7 +44,7 @@ def search_vectors():
 @app.route("/load_data_file_from_s3", medthods=["POST"])
 def embed_description_and_load_vectors():
 
-    local_file_path = os.path.join(LOCAL_TMP_DOWNLOAD_PATH, S3_DATA_FILE_PATH)
+   # local_file_path = os.path.join(LOCAL_TMP_DOWNLOAD_PATH, S3_DATA_FILE_PATH)
 
     data = request.json
     s3_bucket_name = data['s3_bucket_name']
