@@ -327,6 +327,9 @@ services:
 
 ## Add faiss and fastrack-api to existing airflow
   faiss-service:
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
     build:
       context: ./faiss
     ports:

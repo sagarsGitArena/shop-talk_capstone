@@ -41,7 +41,7 @@ def search_vectors():
     distances, indices = index_gpu.search(query, k)  # Perform search on GPU index
     return jsonify({"distances": distances.tolist(), "indices": indices.tolist()})
 
-@app.route("/load_data_file_from_s3", medthods=["POST"])
+@app.route("/load_data_file_from_s3", methods=["POST"])
 def embed_description_and_load_vectors():
 
    # local_file_path = os.path.join(LOCAL_TMP_DOWNLOAD_PATH, S3_DATA_FILE_PATH)
