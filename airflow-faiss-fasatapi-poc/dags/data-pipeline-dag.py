@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 from airflow.utils.dates import days_ago
 from airflow import DAG
@@ -6,9 +7,14 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.operators.bash_operator import BashOperator
 from airflow.providers.http.operators.http import SimpleHttpOperator
 from airflow.hooks.base_hook import BaseHook
-import sys
-print(f'data-pipeline-dag PATH: {sys.path}')
 
+
+
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+import sys
+logging.info(f'data-pipeline-dag PATH: {sys.path}')
 
 #from preprocessing import preprocess_data
 import os
@@ -105,17 +111,32 @@ with DAG(
     #   3> load embeddings into DB
 
     # Step 2: Trigger FAISS Service via API (passing S3 bucket and file info)
+    # load_faiss_vector_db = SimpleHttpOperator(
+    #     task_id='trigger_load_to_fiass_vector_db',
+    #     method='POST',
+    #     http_conn_id=None,  # Define this connection in Airflow's Connection UI
+    #     endpoint=FAISS_API_ENDPOINT,
+    #     data={
+    #         's3_bucket_name': BUCKET_NAME,
+    #         'aws_access_key':  os.environ["AWS_ACCESS_KEY_ID"],
+    #         'aws_secret_key': os.environ["AWS_SECRET_ACCESS_KEY"],
+    #         'file_name' : S3_OBJECT_KEY
+    #     },
+    #     headers={"Content-Type": "application/json"},
+    #     response_check=lambda response: response.status_code == 200,  # Check success status
+    #     extra_options={"timeout": 120},  # Timeout of 2 minutes
+    # )
     load_faiss_vector_db = SimpleHttpOperator(
         task_id='trigger_load_to_fiass_vector_db',
         method='POST',
         http_conn_id=None,  # Define this connection in Airflow's Connection UI
         endpoint=FAISS_API_ENDPOINT,
-        data={
+        data=json.dumps({
             's3_bucket_name': BUCKET_NAME,
-            'aws_access_key':  os.environ["AWS_ACCESS_KEY_ID"],
+            'aws_access_key': os.environ["AWS_ACCESS_KEY_ID"],
             'aws_secret_key': os.environ["AWS_SECRET_ACCESS_KEY"],
-            'file_name' : S3_OBJECT_KEY
-        },
+            's3_object_key': S3_OBJECT_KEY
+        }),
         headers={"Content-Type": "application/json"},
         response_check=lambda response: response.status_code == 200,  # Check success status
         extra_options={"timeout": 120},  # Timeout of 2 minutes

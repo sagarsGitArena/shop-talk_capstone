@@ -37,7 +37,7 @@ COPY . /app
 EXPOSE 8000
 
 # Run the FAISS server
-CMD ["python3", "app.py"]
+CMD ["python3", "-u", "app.py"]
 
 
 

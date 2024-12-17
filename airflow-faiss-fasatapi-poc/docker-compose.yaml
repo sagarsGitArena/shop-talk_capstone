@@ -79,6 +79,7 @@ x-airflow-common:
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
     REGION_NAME: ${REGION_NAME}
+    PYTHONUNBUFFERED: 1
         
 
     # yamllint disable rule:line-length
@@ -345,7 +346,8 @@ services:
     networks:
       - shared_network
     volumes:
-      - ./tmp_data:/app/tmp_data
+      - ./tmp:/app/tmp
+      - ./data:/app/data
 
   fasttrack-api:
     build:
