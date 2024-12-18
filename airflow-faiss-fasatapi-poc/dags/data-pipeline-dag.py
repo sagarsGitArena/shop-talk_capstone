@@ -139,6 +139,6 @@ with DAG(
         }),
         headers={"Content-Type": "application/json"},
         response_check=lambda response: response.status_code == 200,  # Check success status
-        extra_options={"timeout": 120},  # Timeout of 2 minutes
+        extra_options={"timeout": 300},  # Timeout of 5 minutes -- Shouldn't take more than 3 mins
     )
 check_if_data_file_arrived >> load_faiss_vector_db
