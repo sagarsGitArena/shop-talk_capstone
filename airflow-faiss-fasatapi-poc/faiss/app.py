@@ -6,12 +6,15 @@ import os
 import sys
 import pandas as pd
 import logging
+from sentence_transformers import SentenceTransformer
+
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'faiss_utils'))
 print(f'faiss: app.py - PATH: {sys.path}')
 
-from faiss_utils.s3_download import download_file_from_s3 
+from faiss_utils.s3_download import download_file_from_s3, delete_file_from_s3
 from config import BUCKET_NAME, S3_DATA_FILE_PATH, LOCAL_DATA_DIR
 
 
@@ -47,7 +50,7 @@ def search_vectors():
 @app.route("/load_data_file_from_s3", methods=["POST"])
 def embed_description_and_load_vectors():
 
-    local_data_dir = LOCAL_DATA_DIR
+    local_directory = LOCAL_DATA_DIR
     #os.path.join(LOCAL_TMP_DOWNLOAD_PATH, S3_DATA_FILE_PATH)
     
     data = request.json
@@ -73,20 +76,100 @@ def embed_description_and_load_vectors():
     )
 
     # Download the CSV from S3
-    #download_file_from_s3(aws_access_key, aws_secret_key, s3_bucket_name, file_name, local_file_path)
-    download_file_from_s3(aws_access_key, aws_secret_key, s3_bucket_name, s3_object_key, local_data_dir)
+
+    downloaded = download_file_from_s3(aws_access_key, aws_secret_key, s3_bucket_name, s3_object_key, local_directory)
+
+    if (downloaded):
+        delete_file_from_s3(aws_access_key, aws_secret_key, s3_bucket_name, s3_object_key)
     # file_obj = s3_client.get_object(Bucket=bucket_name, Key=file_key)
-    US_df = pd.read_csv(os.path.join(local_data_dir, file_name))
+    products_captioned_df = pd.read_csv(os.path.join(local_directory, file_name))
     logging.info('==================d==================')
-    logging.info(US_df.info())
+    logging.info(products_captioned_df.info())
     logging.info('====================================')
-    # Get the 'descriptions' column and process
-    #descriptions = df['descriptions'].tolist(
-    #embeddings = compute_embeddings(descriptions)
 
-    # Add embeddings to FAISS index
-    #index.add(embeddings)
+    products_captioned_df['concatenated_desc'] = products_captioned_df['caption'].astype(str)+" "+ products_captioned_df['bullet_point_value'].astype(str)
 
+    # Initialize the model for embeddings
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+
+    # Generate embeddings and add them as a column
+    products_captioned_df['embeddings'] = products_captioned_df['concatenated_desc'].apply(lambda desc: model.encode(desc).astype('float32'))
+
+    # Get the dimension of embeddings (depends on the model used)
+    embedding_dim = len(products_captioned_df['embeddings'][0])
+
+    # Parameters for IVF-PQ index
+    nlist = 100  # Number of clusters (inverted lists), tune based on dataset size
+    m = 8        # Number of sub-quantizers
+    nbits = 8    # Bits per sub-quantizer (for 256 centroids per sub-vector)
+
+    
+    # Create an IVF-PQ index with Euclidean distance metric
+    quantizer = faiss.IndexFlatL2(embedding_dim)  # Underlying index for quantization
+    index = faiss.IndexIVFPQ(quantizer, embedding_dim, nlist, m, nbits)
+
+
+    # Train the index on embeddings (required for IVF-PQ)
+    embeddings_array = np.stack(products_captioned_df['embeddings'].values)
+    index.train(embeddings_array)
+    
+    # Dictionary to map FAISS index to item_id
+    faiss_to_item_id = {}
+
+    # Populate FAISS and store metadata by item_id
+    metadata = {}
+    for i, row in products_captioned_df.iterrows():
+        embedding = np.array(row['embeddings'], dtype='float32').reshape(1, -1)
+        index.add(embedding)  # Add embedding to FAISS
+
+        # Store metadata using item_id as key
+        item_id = row['item_id']
+        metadata[item_id] =  {
+            "item_id": row['item_id'],
+            "item_weight_0_normalized_value_unit": row['item_weight_0_normalized_value_unit'],
+            "item_weight_0_normalized_value_value": row['item_weight_0_normalized_value_value'],
+            "item_weight_0_unit": row['item_weight_0_unit'],
+            "item_weight_0_value": row['item_weight_0_value'],
+            "model_number_0_value": row['model_number_0_value'],
+            "product_type_0_value": row['product_type_0_value'],
+            "main_image_id": row['main_image_id'],
+            "color_code_0": row['color_code_0'],
+            "country": row['country'],
+            "marketplace": row['marketplace'],
+            "domain_name": row['domain_name'],
+            "item_dimensions_height_normalized_value_unit": row['item_dimensions_height_normalized_value_unit'],
+            "item_dimensions_height_normalized_value_value": row['item_dimensions_height_normalized_value_value'],
+            "item_dimensions_height_unit": row['item_dimensions_height_unit'],
+            "item_dimensions_height_value": row['item_dimensions_height_value'],
+            "item_dimensions_length_normalized_value_unit": row['item_dimensions_length_normalized_value_unit'],
+            "item_dimensions_length_normalized_value_value": row['item_dimensions_length_normalized_value_value'],
+            "item_dimensions_length_unit": row['item_dimensions_length_unit'],
+            "item_dimensions_length_value": row['item_dimensions_length_value'],
+            "item_dimensions_width_normalized_value_unit": row['item_dimensions_width_normalized_value_unit'],
+            "item_dimensions_width_normalized_value_value": row['item_dimensions_width_normalized_value_value'],
+            "item_dimensions_width_unit": row['item_dimensions_width_unit'],
+            "item_dimensions_width_value": row['item_dimensions_width_value'],
+            "model_year_0_value": row['model_year_0_value'],
+            "style_value": row['style_value'],
+            "item_shape_value": row['item_shape_value'],
+            "pattern_value": row['pattern_value'],
+            "fabric_type_value": row['fabric_type_value'],
+            "item_name_value": row['item_name_value'],
+            "material_value": row['material_value'],
+            "item_keywords_value": row['item_keywords_value'],
+            "finish_type_value": row['finish_type_value'],
+            "model_name_value": row['model_name_value'],
+            "bullet_point_value": row['bullet_point_value'],
+            "color_value": row['color_value'],
+            "brand_value": row['brand_value'],
+            "Price": row['Price'],
+            "caption": row['caption'],
+            "concatenated_desc": row['concatenated_desc']
+        }
+
+            # Map FAISS index to item_id
+        faiss_to_item_id[index.ntotal - 1] = item_id  # Current FAISS index
+    
     return jsonify({"status": "success", "message": "Embeddings processed and loaded to FAISS!"}), 200
 
 
