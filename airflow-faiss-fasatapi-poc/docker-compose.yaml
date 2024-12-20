@@ -327,12 +327,12 @@ services:
 
 
 ## Add faiss and fastrack-api to existing airflow
-  faiss-service:
+  vector-db-service:
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     build:
-      context: ./faiss
+      context: ./vector_db_service
     ports:
       - "5050:8000"
     healthcheck:
@@ -342,23 +342,24 @@ services:
       retries: 3               # Number of retries before marking the service as unhealthy
       start_period: 30s        # Grace period for startup
     restart: always
-    container_name: faiss-service
+    container_name: vector-db-service
     networks:
       - shared_network
     volumes:
-      - ./tmp:/app/tmp
       - ./data:/app/data
+      - ./faiss_db:/app/faiss_db
+      - ./chroma_db:/app/chroma_db
 
-  fasttrack-api:
-    build:
-      context: ./fasttrack-api
-    ports:
-      - "6060:5000"
-    container_name: fasttrack-api
-    networks:
-      - shared_network
-    depends_on:
-      - faiss-service
+  # fasttrack-api:
+  #   build:
+  #     context: ./fasttrack-api
+  #   ports:
+  #     - "6060:5000"
+  #   container_name: fasttrack-api
+  #   networks:
+  #     - shared_network
+  #   depends_on:
+  #     - vector-db-service
 
 
 volumes:

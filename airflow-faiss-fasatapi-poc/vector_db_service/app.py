@@ -5,17 +5,19 @@ import cupy  # CuPy to support GPU operations
 import os
 import sys
 import pandas as pd
+import json
 import logging
 from sentence_transformers import SentenceTransformer
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-sys.path.append(os.path.join(os.path.dirname(__file__), 'faiss_utils'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 print(f'faiss: app.py - PATH: {sys.path}')
 
-from faiss_utils.s3_download import download_file_from_s3, delete_file_from_s3
+from utils.s3_utils import download_file_from_s3, delete_file_from_s3, upload_file_to_s3
 from config import BUCKET_NAME, S3_DATA_FILE_PATH, LOCAL_DATA_DIR
+from config import FAISS_LOCAL_DB_STORE, FAISS_METADATA_JSON_FILE, FAISS_INDEX_BIN_FILE, FAISS_METADATA_JSON_FILE_S3_OBJECT_KEY, FAISS_INDEX_FILE_S3_OBJECT_KEY
 
 
 
@@ -169,6 +171,18 @@ def embed_description_and_load_vectors():
 
             # Map FAISS index to item_id
         faiss_to_item_id[index.ntotal - 1] = item_id  # Current FAISS index
+    
+    # Save FAISS index locally
+    local_index_bin_file_path=  FAISS_LOCAL_DB_STORE + '/' + FAISS_INDEX_BIN_FILE
+    faiss.write_index(index, local_index_bin_file_path)
+
+    # Save metadata locally
+    local_json_metadata_file_path = FAISS_INDEX_BIN_FILE + '/' + FAISS_METADATA_JSON_FILE
+    with open(local_json_metadata_file_path, 'w') as f:
+        json.dump(metadata, f)
+    
+    upload_file_to_s3(aws_access_key, aws_secret_key, s3_bucket_name, FAISS_INDEX_FILE_S3_OBJECT_KEY, local_index_bin_file_path)
+    upload_file_to_s3(aws_access_key, aws_secret_key, s3_bucket_name, FAISS_METADATA_JSON_FILE_S3_OBJECT_KEY, local_json_metadata_file_path)
     
     return jsonify({"status": "success", "message": "Embeddings processed and loaded to FAISS!"}), 200
 

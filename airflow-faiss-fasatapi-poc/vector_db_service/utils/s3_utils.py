@@ -1,22 +1,10 @@
 import boto3
 import logging
 import os
+from botocore.exceptions import NoCredentialsError
+
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# from botocore.exceptions import NoCredentialsError
-
-# def download_file_from_s3(access_key, secret_key, bucket_name, file_name, local_file_path):
-#     s3 = boto3.client('s3', aws_access_key_id=access_key, aws_secret_access_key=secret_key)
-
-#     try:
-#         s3.download_file(bucket_name, file_name, local_file_path)
-#         logging.info(f"File '{file_name}' downloaded successfully to '{local_file_path}'")
-#     except FileNotFoundError:
-#         logging.error(f"The file '{file_name}' does not exist in the bucket '{bucket_name}'")
-#     except NoCredentialsError:
-#         logging.error("Credentials not available or incorrect")
-
 
 
 def download_file_from_s3(aws_access_key, aws_secret_key, bucket_name, s3_object_key, local_directory):
@@ -90,3 +78,18 @@ def delete_file_from_s3(aws_access_key, aws_secret_key, bucket_name, s3_object_k
         print(f"Error: {e}")
     
     return False
+
+
+def upload_file_to_s3(access_key, secret_key, bucket_name, file_name, local_file_path):
+    # Create an S3 client using the provided credentials
+    s3 = boto3.client('s3', aws_access_key_id=access_key, aws_secret_access_key=secret_key)
+
+    try:
+        # Upload the local file to the specified S3 bucket with the given filename
+        s3.upload_file(local_file_path, bucket_name, file_name)
+        print(f"File '{file_name}' uploaded successfully to '{bucket_name}'")
+    except FileNotFoundError:
+        print(f"The file '{local_file_path}' does not exist")
+    except NoCredentialsError:
+        print("Credentials not available or incorrect")
+        
