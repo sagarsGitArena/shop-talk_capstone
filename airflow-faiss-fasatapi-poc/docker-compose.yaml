@@ -347,8 +347,8 @@ services:
       - shared_network
     volumes:
       - ./data:/app/data
-      - ./faiss_db:/app/faiss_db
-      - ./chroma_db:/app/chroma_db
+      - ./vector_database/faiss_db:/app/vector_database/faiss_db
+      - ./vector_database/chroma_db:/app/vector_database/chroma_db
 
   # fasttrack-api:
   #   build:

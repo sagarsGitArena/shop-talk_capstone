@@ -177,7 +177,7 @@ def embed_description_and_load_vectors():
     faiss.write_index(index, local_index_bin_file_path)
 
     # Save metadata locally
-    local_json_metadata_file_path = FAISS_INDEX_BIN_FILE + '/' + FAISS_METADATA_JSON_FILE
+    local_json_metadata_file_path = FAISS_LOCAL_DB_STORE + '/' + FAISS_METADATA_JSON_FILE
     with open(local_json_metadata_file_path, 'w') as f:
         json.dump(metadata, f)
     
