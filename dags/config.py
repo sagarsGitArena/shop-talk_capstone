@@ -1,3 +1,6 @@
+TMP_LISTINGS_SOURCE="/opt/airflow/downloads"
+
+
 LISTINGS_DOWNLOAD_PATH_URL="https://amazon-berkeley-objects.s3.amazonaws.com/archives/abo-listings.tar"
 LOCAL_RAW_DATA_DIR="/opt/airflow/data/raw"
 ALL_LISTINGS_DATA_CSV="all_listings.csv"
