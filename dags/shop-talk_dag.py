@@ -44,11 +44,11 @@ with DAG(
 
 ## TEmporarily disable download task instead have copy task
 
-    # download_task = PythonOperator(
-    #     task_id="download_tar_file",
-    #     python_callable=download_tar_file,
-    #     dag=dag
-    # )
+    download_task = PythonOperator(
+        task_id="download_tar_file",
+        python_callable=download_tar_file,
+        dag=dag
+    )
 
     extract_task = PythonOperator(
         task_id="extract_tar_file",
@@ -79,15 +79,7 @@ with DAG(
         dag=dag
     )
     
-    # flatten_each_json_and_save_as_csv = PythonOperator(
-    #     task_id="flatten_each_json_and_save_as_csv",
-    #     python_callable=flatten_each_json_and_save_as_csv,
-    #     op_kwargs= {"local_extracted_json_dir": "listings/metadata/"                   
-    #     },
-    #     #provide_context=True,        
-    #     trigger_rule='all_done',
-    # )
-    
+
     
     flatten_all_json_and_save_as_csv = PythonOperator(
         task_id="flatten_all_json_and_save_as_csv",
@@ -99,14 +91,7 @@ with DAG(
         depends_on_past=False,
         dag=dag
     )
-    
-    # upload_listings_to_s3 = PythonOperator(
-    #     task_id="upload_listings_to_s3",
-    #     python_callable=up_load_us_listings_to_s3,
-    #     trigger_rule='all_success',
-    #     depends_on_past=False,
-    #     dag=dag
-    # )
+
 
 
   # Task 1: Download the images tar file
@@ -144,4 +129,10 @@ with DAG(
             dag=dag
     )
     # [download_task >> extract_task >> flatten_all_json_and_save_as_csv >>upload_listings_to_s3, download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
-[download_task >> extract_task >> flatten_all_json_and_save_as_csv , download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
+## If we are downloading and extracting the tar
+#[download_task >> extract_task >> flatten_all_json_and_save_as_csv , download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
+
+## If we are copying the tar file from local dir for minimal dataset
+[copy_listings_task >> extract_task >> flatten_all_json_and_save_as_csv , download_images_task >> extract_images_task >> flatten_images_metadata_task] >> merge_listings_image_df_task
+
+
