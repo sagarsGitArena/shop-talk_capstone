@@ -18,7 +18,7 @@ import numpy as np
 #from sentence_transformers import SentenceTransformer
 
 from datetime import datetime, timedelta
-from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION, IMAGES_DOWNLOAD_PATH_URL,LOCAL_RAW_IMGS_DIR, IMAGES_CSV_FILE_LOCATION, IMAGES_CSV_FILE, TMP_LISTINGS_SOURCE
+from config import LISTINGS_DOWNLOAD_PATH_URL, LOCAL_RAW_DATA_DIR, ALL_LISTINGS_DATA_CSV, US_ONLY_LISTINGS_CSV, US_PRODUCT_IMAGE_MERGE_CSV, AWS_S3_BUCKET, LISTINGS_CSV_FILE_LOCATION, IMAGES_DOWNLOAD_PATH_URL,LOCAL_RAW_IMGS_DIR, IMAGES_CSV_FILE_LOCATION, IMAGES_CSV_FILE, TMP_LISTINGS_SOURCE, TAR_FILE_NAME
 
 #from s3_download import download_file_from_s3
 def download_tar_file(**kwargs):
@@ -47,9 +47,11 @@ def download_tar_file(**kwargs):
 
 
 
-def copy_listings_tar_file(source_path, destination_path):
+def copy_listings_tar_file(source_path, destination_path, tar_file_name):
+    
+    source = os.path.join(source_path, tar_file_name)
     # Ensure the source file exists
-    if not os.path.isfile(source_path):
+    if not os.path.isfile(source):
         print(f"Source file does not exist: {source_path}")
         return
     
@@ -58,7 +60,7 @@ def copy_listings_tar_file(source_path, destination_path):
 
     try:
         # Copy the .tar file
-        shutil.copy(source_path, destination_path)
+        shutil.copy(source, destination_path)
         print(f"File copied successfully to {destination_path}")
     except Exception as e:
         print(f"Error while copying file: {e}")
